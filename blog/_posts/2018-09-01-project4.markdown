@@ -1,0 +1,70 @@
+---
+layout: post
+title:  "What determines a data scientist's salary?"
+date:   2018-09-01 13:36:10 +1000
+categories: jekyll update
+---
+I was interested in finding out what factors influence salaries for jobs in data, particularly data scientists and data analysts. I started by scraping information from job ads listed on aggregator website Indeed.com. In total I scraped 1258 job listings from searches for ‘data scientist’ and ‘data analyst’ in Australia. Since I ran two searches, and promoted jobs appear on multiple pages on Indeed.com, I had a lot of duplicates so once I trimmed these down I was left with information on job title, location, salary and job summary text for 745 jobs.
+
+To turn this data into features I could use for machine learning, I used a TF-IDF vectorizer on both the job title and job summary text. TF-IDF gives each word in each document a score based on how frequently that word appears in the document vs how frequently it appears in all the other documents. So words that appear a lot in one document but not as often in others will get a high TF-IDF score, while words that are common to lots of documents will get a lower score. I also used a technique known as 'stemming' where words were reduced to their roots, so that different forms of words with the same meaning are counted together. For example, 'business', 'businesses' and 'businessman' would all be reduced to 'busi'. Using these techniques I created a table of keywords along with columns for location by state.
+
+
+### Linear modelling of salaries in data jobs
+
+Unfortunately, when it came to predicting salary, only a minority of job listings actually explicitly list salary information, so when limiting my dataset to those with listed information I only had 135 jobs to base my model on. Nonetheless, I started by doing some exploratory data analysis.
+
+
+![Distribution of mean salary]({{ "/images/project4_EDA.png" | absolute_url }})
+
+<b>Fig 1. Frequency histogram of mean salaries</b>
+
+
+There was a wide range of advertised salaries, from around $26,000 p.a. for some scholarships to a maximum of $250,000 p.a. The distribution of salaries is somewhat positively skewed, with the majority being around the median of ~$92,000 p.a. but a long tail of salaries leading up to that maximum value. 
+
+My first approach to looking at what keywords are important for predicting salary was to use a linear regression approach. In this case my target variable was mean salary (taken as a mean of the high and low ends of the estimated salary range). Predictor variables were narrowed down using recursive feature elimination and regularized using an elastic net regressor model. This yielded a model with an r2 score of 0.39.
+
+
+![Linear regression salary model]({{ "/images/project4_linear_model.png" | absolute_url }})
+
+<b>Fig 2. Linear regression model of mean salary</b>
+
+
+![Factors that positively influence salary]({{ "/images/project4_positive.png" | absolute_url }})
+
+<b>Fig 3. Keywords that predict higher salary</b>
+
+
+Extracting the coefficients of the linear model shows us what keywords have the greatest impact on salary. Job listings that score highly on the word 'entrepreneurial' were more likely to have a higher predicted mean salary than those that don't. Other words such as 'businesses', 'cap (probably short for capital?) and 'equ'(short for equity?) also predicted higher salary, suggesting that perhaps private and financial sector jobs tend to have higher salaries. Interesting jobs that scored highly for both 'major' and 'small' had higher predicted mean salaries. It is possible context is important in this case, and possibly using ngrams to look at the words in context would be a useful future step. Words that indicate a high-pressure environment like 'multitask', 'demanding' and 'tight' also predicted a higher salary, suggesting that if you want a high paying job, be prepared for stress.
+
+
+![Factors that negatively influence salary]({{ "/images/project4_negative.png" | absolute_url }})
+
+<b>Fig 4. Keywords that predict lower salary</b>
+
+
+As for those keywords that had a negative impact on predicted salary, a few noticeable trends are present. Understandably, the word 'junior' in both the summary and the job title predicted a lower salary. Amusingly, so did the words 'blue' and 'chip', suggesting that companies that self-describe as 'blue chip' are perhaps not likely to pay as well. Disappointingly but in no way surprisingly for a former academic like myself, the keyword 'academic' also predicted a lower mean salary, suggesting that academic roles are not the most lucrative way to go in the data industry. It appears also that shorter-term contract work also negatively impacts predicted salary, with words like 'period', 'extend' and '6month' all being negative predictors as well.
+
+
+### Can we distinguish between different types of data roles?
+
+One observation that leapt out from looking at job ads and talking to people with experience in the data industry is that often the boundaries that differentiate a data science role from a data analyst role aren’t that well-defined. Throw in data engineers to this mix as well and there’s a lot of potential for overlap between roles. 
+So, the next question I decided to look at was whether or not we can look at the keywords we extracted above and predict whether or not they came from a ‘data analyst’, ‘data scientist’ or ‘data engineer’ job. 
+To do this, I created labels for each job based on whether they had the words ‘data scientist’, ‘data analyst’ or ‘data engineer’ in the title, and discarded any that fit into none of these categories. Then I took my keywords from before (excluding a few words like ‘scientist’, ‘analyst’ and ‘engineer’ for example) and used these keywords to build and test different classification algorithms on how well they were able to sort the jobs into these three categories.
+
+
+![Confusion matrix]({{ "/images/project4_cm.png" | absolute_url }})
+
+<b>Fig 5. Confusion matrix for random forest classifier</b>
+
+
+Comparing the accuracy of multiple models, I found that both logistic regression and random forest algorithms performed the best at classifying these jobs, with an accuracy of 0.86 (compared to a baseline of 0.70). Since we can extract feature importances from a random forest model, we can look at what keywords were the most important for differentiating these three job categories.
+
+
+![Keywords that differentiate categories]({{ "/images/project4_category.png" | absolute_url }})
+
+<b>Fig 6. Keywords that distinguish job categories</b>
+
+
+The keyword 'Machine', as well as the keyword 'learn' (and to a lesser extent 'predict'), all associated with the concept of machine learning, came up as important differentiators. This isn’t surprising, since machine learning is supposed to be one of the defining skills of a data scientist. 'Environment' and 'Environmental' also come up as important keywords, probably being related to 'scientist' more than other job types. Interestingly, in terms of skills both Python and Spark appear to be the key skills that differentiate between data scientist roles, data analyst roles and data engineer roles, although it is not possible to tell which specific category they indicate. Finally, the word ‘PhD’ also shows up as an important differentiating factor, with some roles evidently being more likely to desire postgraduate qualifications than others.
+
+<i>- CM 30/8/2018</i>

@@ -1,0 +1,110 @@
+---
+layout: post
+title:  "Diagnosing pneumonia with convolutional neural networks"
+date:   2018-09-02 14:10:10 +1000
+categories: jekyll update
+---
+<b>For my capstone project at General Assembly, I chose to focus on neural networks and computer vision, particularly as applied to problems in health and medicine.</b>
+
+### The problem:
+
+Pneumonia is an inflammatory disease of the lungs typically caused by bacterial, viral or fungal infection. It’s one of the leading causes of death worldwide, accounting for approximately 8% of all deaths annually. Young children and the elderly are at particular risk, with pneumonia causing approximately 15% of all deaths of children under 5. Pneumonia is also more prevalent in developing countries, with the highest rates of childhood pneumonia being found in in sub-Saharan Africa and South Asia (1).
+
+![Global distribution of childhood pneumonia]({{ "/images/cap_map.jpg" | absolute_url }})
+
+<b>Fig 1. Global distribution of childhood pneumonia (source: WHO)</b>
+
+Chest X-rays remain one of the most commonly-used tools for diagnosing and monitoring the progression of pneumonia. The downside being that they require interpretation from a highly-trained radiologist in order to make a diagnosis. This can take additional time which can endanger the patient as rapid treatment is important in cases of pneumonia. Furthermore, pneumonia is most prevalent in parts of the world that may lack the resources, personnel and infrastructure to have these X-rays rapidly diagnosed. For these reasons, the use of machine learning to expedite and automate the screening of chest X-rays has been an area of increasing interest to health professionals over the last few years.
+
+
+### The goal:
+
+My goal in this project was to train a neural network to classify chest X-ray images into whether they are healthy or whether they show signs of pneumonia. I would use % accuracy and receiver operating characteristing (ROC) to measure the success of this goal.
+
+
+### The dataset:
+
+I obtained my dataset from [Kaggle.com]({{ "https://www.kaggle.com/paultimothymooney/chest-xray-pneumonia" | absolute_url }}). This data consisted of nearly 6000 chest X-ray images taken from a children’s hospital in Guangzhou, China. The data was split into a training set of 5216 
+
+![Example images]({{ "/images/cap_examples.png" | absolute_url }})
+
+<b>Fig 2. Example chest X-ray images</b>
+
+images, a test set of 624 images and a validation set of 16 images. The training set was quite imbalanced between normal and pneumonia images though, with 1341 normal images and 3875 pneumonia images. To simplify things and save computation time later on, my approach to addressing this imbalance was to simply randomly undersample the pneumonia images, taking 1341 images from this category in total. So, my final training set was 2682 images, evenly split between normal and pneumonia.
+
+
+### The approach:
+
+My aim was to train a neural network to automatically classify these images into pneumonia and non-pneumonia, so that’s a two-class classification problem. One of the most common methods for tackling image classification problems is to use a class of neural networks known as convolutional neural networks (CNNs). The basic idea is that a CNN takes an image array as an input and passes it through a series of convolution layers before finally flattening the image matrix into one long array and carrying out some sort of classification algorithm in these final dense layers. 
+CNN architectures can be pretty complicated, and there’s a lot of finesse involved in working out exactly what kind of layers you should put in. As a newcomer to the field, I figured it was best not to re-invent the wheel (yet) and see how I went using a couple of pre-existing CNN architectures. For now I started with two architectures based on the Residual Network (ResNet) model: ResNet50 and InceptionV3. I implemented these networks in Python using Keras and TensorFlow.
+
+
+### Training my networks from scratch:
+
+I started out by training a ResNet50 network with no pre-loaded weights. This means the network would be figuring all the feature detection steps from scratch. This training process requires a lot of calculations so it can be quite time-consuming and computationally intense. Luckily, TensorFlow is able to utilise GPU computing to speed things up a little and I was able to train my network for 1000 epochs in approximately 10 hours.
+At each step, the accuracy score (% of correct predictions out of total predictions) calculated for the training images and then validated on the test images. I logged this accuracy at each step and plotted it over time:
+
+![ResNet50 accuracy]({{ "/images/cap_resnet_acc.png" | absolute_url }})
+
+<b>Fig 3. Accuracy score for ResNet50 over training epochs</b>
+
+Aside from the occasional hiccup, the test accuracy improved over time, eventually settling around 80%. Unfortunately, the accuracy on the training set was always a lot higher, suggesting maybe the network is over-fitting to the training images. If we look at how the network was actually classifying each image vs the actual labels for each image, we get a confusion matrix like this:
+
+![ResNet50 confusion matrix]({{ "/images/cap_resnet_cm.png" | absolute_url }})
+
+<b>Fig 4. Confusion matrix for ResNet50 trained from scratch</b>
+
+The overall accuracy on the test image set was 79%. As you can see from the confusion matrix, most of these errors were from the network incorrectly classifying normal X-rays as pneumonia, while the network was doing great at accurately detecting pneumonia. This high false-positive rate isn’t ideal, but in this scenario it’s certainly preferable to a high false-negative rate. It’s much better to tell a healthy person they might have pneumonia and to go and have some follow-up tests than to tell a patient with pneumonia that they are fine and they should go home!
+Trying the same approach with the InceptionV3 architecture, I obtained very similar results. 
+
+![InceptionV3 accuracy]({{ "/images/cap_inc_acc.png" | absolute_url }})
+
+<b>Fig 5. Accuracy score for InceptionV3 over training epochs</b>
+
+![InceptionV3 accuracy]({{ "/images/cap_inc_cm.png" | absolute_url }})
+
+<b>Fig 6. Confusion matrix for InceptionV3 trained from scratch</b>
+
+InceptionV3 is making the same kinds of errors as ResNet50, but marginally less of them so the accuracy ended up being 82%. 
+So, training from scratch yielded a couple of neural networks that were good at detecting pneumonia, but had a high false-positive rate. Also, both networks had the problem of performing much better on the training data than the test data, suggesting they are probably over-fitting to the training data.
+
+### The solution: Image augmentation and transfer learning
+
+First, to address the over-fitting problem I used a technique known as augmentation. This basically means that before each image is passed into the neural network, it undergoes a series of random transformations. These could include rescaling pixel values, shifting the image in the x- or y-axis, rotating the image or shearing the image to name a few examples. Keras makes this process easy, allowing you to define what transformations you’d like to do to each image as it’s loaded into the network. Since all chest X-rays exist within certain defined parameters (that is, every chest X-ray is taken in roughly the same position) I decided to only perform a couple of transformations: shifting the image in the x- and y-axis, and reflecting images horizontally. The idea is that by altering where features appear and their scale, it helps the network to identify the features themselves more effectively without placing as much emphasis on precise location or scale, hopefully reducing over-fitting.
+
+![Image augmentation]({{ "/images/cap_augment.png" | absolute_url }})
+
+<b>Fig 7. Example of image augmentation</b>
+
+The other thing I tried to improve my CNN’s performance was to use network weights that had been pre-trained. Both ResNet50 and InceptionV3 have previously been trained on ImageNet, a collection of over 14 million images of everyday objects, to yield weights that are highly-trained to recognise and extract important features from images. The idea is to use these pre-trained weights through the convolutional layers of the network to effectively extract the important features of the image. These features are then used as input to a much smaller series of dense layers at the end that will perform the two-class classification that I’m interested in. One of the advantages of doing this is that you’re only training a smaller number of layers, reducing the time it takes enormously. This process of taking knowledge acquired from one problem (e.g. ImageNet) and applying it to a new problem (e.g. diagnosing pneumonia) is called ‘transfer learning’.
+
+![Final accuracy]({{ "/images/cap_final_acc.png" | absolute_url }})
+
+<b>Fig 8. Accuracy score for pre-trained InceptionV3 with image augmentation</b>
+
+I applied these methods to InceptionV3, as this one performed marginally better in my initial attempts. As you can see above, augmentation has helped with the over-fitting problem, with training accuracy close to test accuracy over all epochs. 
+
+![Final confusion matrix]({{ "/images/cap_final_cm.png" | absolute_url }})
+
+<b>Fig 9. Confusion matrix for pre-trained InceptionV3 with image augmentation</b>
+
+Overall though, this approach yielded a higher accuracy rate of 87%. Although this network is doing much better at accurately classifying normal X-rays, it’s actually doing slightly worse at classifying pneumonia. 
+
+
+### Trading off between false positives and false negatives: AUC-ROC score
+
+The output of the neural network is basically two probabilities: the probability that it is normal and the probability that it is pneumonia. I’ve been deciding which category to assign it to by simply looking at which probability is higher. That’s effectively a probability threshold of 50%. If it’s more than 50% likely that it’s pneumonia, we decide it’s pneumonia. 
+This might not be the best way to proceed though! As I said above, there’s good reason to want to minimize the false negative rate rather than the overall accuracy. If probability threshold is flexible, how do we evaluate how well our network is classifying things?
+This is why receiver operating characteristic (ROC) is commonly used as a metric of classification algorithms. An ROC curve is the curve made by plotting the true positive rate vs. the false positive rate. When we adjust the probability threshold, we’re essentially adjusting the false positive rate. Looking at the ROC curve tells us how low we can adjust the false positive rate before we start to miss a lot of true positives. The closer the area under the ROC curve (AUC) is to 1, the better our classification algorithm is performing.
+
+![Final AUC-ROC]({{ "/images/cap_aucroc.png" | absolute_url }})
+
+<b>Fig 8. Receiver operating characteristic (ROC) curve for pre-trained InceptionV3 with image augmentation</b>
+
+Using AUC as a metric, my CNN is performing pretty well with an AUC of 0.93. This is a pretty good result considering existing commercial software for detecting tuberculosis has been found in reviews to have an estimated AUC of between 0.71 and 0.84 (2). There’s room for improvement though as more recent efforts in that same space have yielded AUC scores as high as 0.99 (3). 
+There is clear potential for CNNs to efficiently diagnose pneumonia from chest X-rays with a high degree of accuracy, potentially leading to reduced disease burden and mortality from pneumonia.
+
+### References:
+1. Ruuskanen O, Lahti E, Jennings LC, Murdoch DR (2011). "Viral pneumonia". Lancet. 377 (9773).
+2. Pande T, Cohen C, Pai M, Ahmad Khan F. Computer-aided detection of pulmonary tuberculosis on digital chest radiographs: a systematic review. Int J Tuberc Lung Dis2016;20(9):1226–1230
+3. Lakhani P and Sundaram B (2017). "Deep Learning at Chest Radiography: Automated Classification of Pulmonary Tuberculosis by Using Convolutional Neural Networks" Radiology. 284 (2).
